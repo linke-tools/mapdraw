@@ -18,17 +18,12 @@ document.addEventListener('DOMContentLoaded', () => {
     // Validiere UUID Format
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
     if (projectId && !uuidRegex.test(projectId)) {
-        console.error('Ungültige Projekt-ID');
-        document.getElementById('create-project').classList.remove('hidden');
+        showError('Ungültige Projekt-ID');
+        setTimeout(() => {
+            window.location.href = window.location.pathname;
+        }, 2000);
         return;
     }
-
-    // WICHTIG: Zuerst alle UI-Elemente verstecken
-    document.getElementById('project-modal').classList.add('hidden');
-    document.getElementById('project-name').classList.add('hidden');
-    document.getElementById('drawing-controls').classList.add('hidden');
-    document.getElementById('create-project').classList.add('hidden');
-    document.getElementById('save').classList.add('hidden');
 
     // Map initialisieren
     map = L.map('map', {
@@ -45,6 +40,13 @@ document.addEventListener('DOMContentLoaded', () => {
     drawingLayer = L.layerGroup().addTo(map);
 
     setupEventListeners();
+    
+    // UI-Elemente verstecken
+    document.getElementById('project-modal').classList.add('hidden');
+    document.getElementById('project-name').classList.add('hidden');
+    document.getElementById('drawing-controls').classList.add('hidden');
+    document.getElementById('create-project').classList.add('hidden');
+    document.getElementById('save').classList.add('hidden');
     
     // Dann erst die Projekt-Logik ausführen
     if (projectId) {
@@ -222,94 +224,95 @@ async function loadProject() {
         console.log('Loading project:', projectId);
         const response = await fetch(`api.php?action=load&project=${projectId}`);
         
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
         const data = await response.json();
-        console.log('Project data:', data);
         
-        if (data.success) {
-            // Controls sichtbar machen
-            const drawingControls = document.getElementById('drawing-controls');
-            drawingControls.classList.remove('hidden');
-            
-            document.getElementById('project-name').classList.remove('hidden');
-            document.getElementById('project-name-text').textContent = data.name;
-            
-            // Kopier-Button Event Listener
-            document.getElementById('copy-link').addEventListener('click', function() {
-                const url = window.location.href;
-                navigator.clipboard.writeText(url).then(() => {
-                    // Visuelles Feedback
-                    const copyButton = this;
-                    copyButton.classList.add('copied');
-                    setTimeout(() => {
-                        copyButton.classList.remove('copied');
-                    }, 1500);
-                }).catch(err => {
-                    console.error('Fehler beim Kopieren:', err);
-                });
-            });
-            
-            // Save-Button initial verstecken
-            document.getElementById('save').classList.add('hidden');
-            hasUnsavedChanges = false;
-            
-            // Karten-Position setzen
-            if (data.lat && data.lng && data.zoom) {
-                map.setView([data.lat, data.lng], data.zoom);
-            }
-            
-            // Zeichnungen laden
-            drawingLayer.clearLayers();
-            if (data.drawings && data.drawings.length > 0) {
-                data.drawings.forEach(drawing => {
-                    try {
-                        const path = JSON.parse(drawing.path);
-                        const line = L.polyline(path, {
-                            color: drawing.color,
-                            weight: 3
-                        });
-                        // ID der Linie speichern
-                        line.lineId = drawing.id;
-                        line.addTo(drawingLayer);
-                    } catch (e) {
-                        console.error('Fehler beim Parsen der Zeichnung:', e);
-                    }
-                });
-            }
-
-            // Standardmäßig Navigationsmodus aktivieren
-            isDrawMode = false;
-            const modeToggleBtn = document.getElementById('mode-toggle');
-            modeToggleBtn.textContent = 'Zeichnen';
-            modeToggleBtn.classList.add('nav-mode');
-            document.getElementById('map').classList.add('nav-mode');
-            
-            // Initial alle Kontrollelemente außer mode-toggle ausblenden
-            const controlElements = drawingControls.querySelectorAll('*:not(#mode-toggle)');
-            controlElements.forEach(element => {
-                element.style.display = 'none';
-            });
-            
-            // Alle Map-Interaktionen aktivieren
-            map.dragging.enable();
-            map.touchZoom.enable();
-            map.doubleClickZoom.enable();
-            map.scrollWheelZoom.enable();
-            map.boxZoom.enable();
-            map.keyboard.enable();
-            if (map.tap) map.tap.enable();
-            
-        } else {
-            throw new Error(data.error || 'Unbekannter Fehler beim Laden des Projekts');
+        if (!data.success) {
+            // Fehlermeldung anzeigen
+            showError('Projekt nicht gefunden');
+            // Nach 2 Sekunden zur Hauptseite weiterleiten
+            setTimeout(() => {
+                window.location.href = window.location.pathname;
+            }, 2000);
+            return;
         }
+        
+        // Controls sichtbar machen
+        const drawingControls = document.getElementById('drawing-controls');
+        drawingControls.classList.remove('hidden');
+        
+        document.getElementById('project-name').classList.remove('hidden');
+        document.getElementById('project-name-text').textContent = data.name;
+        
+        // Kopier-Button Event Listener
+        document.getElementById('copy-link').addEventListener('click', function() {
+            const url = window.location.href;
+            navigator.clipboard.writeText(url).then(() => {
+                // Visuelles Feedback
+                const copyButton = this;
+                copyButton.classList.add('copied');
+                setTimeout(() => {
+                    copyButton.classList.remove('copied');
+                }, 1500);
+            }).catch(err => {
+                console.error('Fehler beim Kopieren:', err);
+            });
+        });
+        
+        // Save-Button initial verstecken
+        document.getElementById('save').classList.add('hidden');
+        hasUnsavedChanges = false;
+        
+        // Karten-Position setzen
+        if (data.lat && data.lng && data.zoom) {
+            map.setView([data.lat, data.lng], data.zoom);
+        }
+        
+        // Zeichnungen laden
+        drawingLayer.clearLayers();
+        if (data.drawings && data.drawings.length > 0) {
+            data.drawings.forEach(drawing => {
+                try {
+                    const path = JSON.parse(drawing.path);
+                    const line = L.polyline(path, {
+                        color: drawing.color,
+                        weight: 3
+                    });
+                    // ID der Linie speichern
+                    line.lineId = drawing.id;
+                    line.addTo(drawingLayer);
+                } catch (e) {
+                    console.error('Fehler beim Parsen der Zeichnung:', e);
+                }
+            });
+        }
+
+        // Standardmäßig Navigationsmodus aktivieren
+        isDrawMode = false;
+        const modeToggleBtn = document.getElementById('mode-toggle');
+        modeToggleBtn.textContent = 'Zeichnen';
+        modeToggleBtn.classList.add('nav-mode');
+        document.getElementById('map').classList.add('nav-mode');
+        
+        // Initial alle Kontrollelemente außer mode-toggle ausblenden
+        const controlElements = drawingControls.querySelectorAll('*:not(#mode-toggle)');
+        controlElements.forEach(element => {
+            element.style.display = 'none';
+        });
+        
+        // Alle Map-Interaktionen aktivieren
+        map.dragging.enable();
+        map.touchZoom.enable();
+        map.doubleClickZoom.enable();
+        map.scrollWheelZoom.enable();
+        map.boxZoom.enable();
+        map.keyboard.enable();
+        if (map.tap) map.tap.enable();
+        
     } catch (error) {
-        console.error('Fehler beim Laden des Projekts:', error);
-        document.getElementById('create-project').classList.remove('hidden');
-        document.getElementById('project-name').classList.add('hidden');
-        document.getElementById('drawing-controls').classList.add('hidden');
+        showError('Fehler beim Laden des Projekts');
+        setTimeout(() => {
+            window.location.href = window.location.pathname;
+        }, 2000);
     }
 }
 
@@ -512,4 +515,23 @@ function distanceToSegment(p, v, w) {
 // Hilfsfunktion zur Berechnung des quadratischen Abstands zwischen zwei Punkten
 function dist2(v, w) {
     return Math.pow(v.x - w.x, 2) + Math.pow(v.y - w.y, 2);
+}
+
+// Neue Funktion für Fehlermeldungen
+function showError(message) {
+    // Erstelle ein Element für die Fehlermeldung falls es noch nicht existiert
+    let errorDiv = document.getElementById('error-message');
+    if (!errorDiv) {
+        errorDiv = document.createElement('div');
+        errorDiv.id = 'error-message';
+        document.body.appendChild(errorDiv);
+    }
+    
+    errorDiv.textContent = message;
+    errorDiv.classList.add('show');
+    
+    // Fehlermeldung nach 2 Sekunden ausblenden
+    setTimeout(() => {
+        errorDiv.classList.remove('show');
+    }, 2000);
 } 
