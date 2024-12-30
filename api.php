@@ -44,6 +44,17 @@ switch($action) {
         
         echo json_encode(['success' => $success]);
         break;
+    case 'check_active_users':
+        if (!isset($_GET['project']) || !isset($_GET['sessionId'])) {
+            echo json_encode(['success' => false, 'error' => 'Missing parameters']);
+            exit;
+        }
+        $activeUsers = updateActiveUsers($db, $_GET['project'], $_GET['sessionId']);
+        echo json_encode([
+            'success' => true,
+            'activeUsers' => $activeUsers
+        ]);
+        break;
     default:
         echo json_encode([
             'success' => false, 
@@ -107,13 +118,21 @@ function loadProject($db, $projectId) {
         $stmt->execute([$projectId]);
         $drawings = $stmt->fetchAll(PDO::FETCH_ASSOC);
         
+        // Session ID aus dem Request holen oder neue generieren
+        $sessionId = $_GET['sessionId'] ?? generateUUID();
+        
+        // Aktive Benutzer aktualisieren
+        $activeUsers = updateActiveUsers($db, $projectId, $sessionId);
+        
         echo json_encode([
             'success' => true,
             'name' => $project['name'],
             'lat' => floatval($project['lat']),
             'lng' => floatval($project['lng']),
             'zoom' => intval($project['zoom']),
-            'drawings' => $drawings
+            'drawings' => $drawings,
+            'sessionId' => $sessionId,
+            'activeUsers' => $activeUsers
         ]);
     } catch (PDOException $e) {
         echo json_encode([
@@ -180,5 +199,25 @@ function saveProject($db, $data) {
         'success' => true,
         'drawings' => $drawings
     ]);
+}
+
+// Neue Funktion zum Aktualisieren der aktiven Benutzer
+function updateActiveUsers($db, $projectId, $sessionId) {
+    // Alte Sessions löschen (älter als 10 Sekunden)
+    $stmt = $db->prepare('DELETE FROM active_users WHERE last_seen < DATE_SUB(NOW(), INTERVAL 10 SECOND)');
+    $stmt->execute();
+    
+    // Session aktualisieren oder erstellen
+    $stmt = $db->prepare('INSERT INTO active_users (project_id, session_id, last_seen) 
+                         VALUES (?, ?, NOW())
+                         ON DUPLICATE KEY UPDATE last_seen = NOW()');
+    $stmt->execute([$projectId, $sessionId]);
+    
+    // Aktive Benutzer zählen
+    $stmt = $db->prepare('SELECT COUNT(DISTINCT session_id) as count 
+                         FROM active_users 
+                         WHERE project_id = ?');
+    $stmt->execute([$projectId]);
+    return $stmt->fetch(PDO::FETCH_ASSOC)['count'];
 }
 ?> 

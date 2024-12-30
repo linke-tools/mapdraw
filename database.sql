@@ -17,4 +17,12 @@ CREATE TABLE drawings (
     color VARCHAR(20) NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (project_id) REFERENCES projects(id)
+);
+
+CREATE TABLE active_users (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    project_id CHAR(36),
+    session_id CHAR(36),
+    last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (project_id) REFERENCES projects(id)
 ); 

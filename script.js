@@ -8,6 +8,7 @@ let projectId = null;
 let hasUnsavedChanges = false;
 let isDrawMode = false; // Standardmäßig Navigationsmodus
 let currentTempLine = null; // Neue Variable für temporäre Linie
+let sessionId = null;
 
 // Initialisierung
 document.addEventListener('DOMContentLoaded', () => {
@@ -234,27 +235,65 @@ async function createProject() {
 
 async function loadProject() {
     try {
-        console.log('Loading project:', projectId);
-        const response = await fetch(`api.php?action=load&project=${projectId}`);
+        // URL um sessionId erweitern falls vorhanden
+        let url = `api.php?action=load&project=${projectId}`;
+        if (sessionId) {
+            url += `&sessionId=${sessionId}`;
+        }
         
+        const response = await fetch(url);
         const data = await response.json();
         
         if (!data.success) {
-            // Fehlermeldung anzeigen
             showError('Projekt nicht gefunden');
-            // Nach 2 Sekunden zur Hauptseite weiterleiten
             setTimeout(() => {
                 window.location.href = window.location.pathname;
             }, 2000);
             return;
         }
+
+        // Session ID speichern
+        sessionId = data.sessionId;
         
+        // Projektname und aktive Benutzer anzeigen
+        document.getElementById('project-name').classList.remove('hidden');
+        document.getElementById('project-name-text').textContent = data.name;
+        
+        // Warnung anzeigen wenn mehrere Benutzer aktiv sind
+        let warningDiv = document.getElementById('active-users-warning');
+        if (!warningDiv) {
+            warningDiv = document.createElement('div');
+            warningDiv.id = 'active-users-warning';
+            document.getElementById('project-name').appendChild(warningDiv);
+        }
+        
+        // Initial die Anzahl der aktiven Benutzer anzeigen
+        if (data.activeUsers > 1) {
+            warningDiv.textContent = `${data.activeUsers} aktive Benutzer`;
+            warningDiv.style.display = 'block';
+        } else {
+            warningDiv.style.display = 'none';
+        }
+
+        // Regelmäßiges Update der aktiven Benutzer
+        setInterval(() => {
+            fetch(`api.php?action=check_active_users&project=${projectId}&sessionId=${sessionId}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        if (data.activeUsers > 1) {
+                            warningDiv.textContent = `${data.activeUsers} aktive Benutzer`;
+                            warningDiv.style.display = 'block';
+                        } else {
+                            warningDiv.style.display = 'none';
+                        }
+                    }
+                });
+        }, 5000); // Alle 5 Sekunden aktualisieren statt 30000
+
         // Controls sichtbar machen
         const drawingControls = document.getElementById('drawing-controls');
         drawingControls.classList.remove('hidden');
-        
-        document.getElementById('project-name').classList.remove('hidden');
-        document.getElementById('project-name-text').textContent = data.name;
         
         // Kopier-Button Event Listener
         document.getElementById('copy-link').addEventListener('click', function() {
