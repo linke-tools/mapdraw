@@ -48,9 +48,26 @@ html, body {
     right: 10px;
     z-index: 1000;
     background: white;
+    padding: 8px 12px;
+    border-radius: 4px;
+    box-shadow: 0 0 10px rgba(0,0,0,0.2);
+    pointer-events: none;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 14px;
+    color: #333;
+}
+
+#create-project {
+    position: absolute;
+    top: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1000;
+    background: white;
     padding: 10px;
     border-radius: 5px;
     box-shadow: 0 0 10px rgba(0,0,0,0.2);
+    cursor: pointer;
 }
 
 .hidden {
@@ -170,4 +187,22 @@ button {
 /* Cursor-Styles für den Radierer */
 #map.eraser-active {
     cursor: crosshair;
+}
+
+/* Styling für den mode-toggle Button */
+#mode-toggle {
+    display: inline-block !important; /* Immer sichtbar */
+    margin-right: 10px;
+}
+
+/* Container für die anderen Kontrollelemente */
+#drawing-controls {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+/* Standardmäßig alle Kontrollelemente ausblenden */
+#drawing-controls > *:not(#mode-toggle) {
+    transition: display 0.3s ease;
 } 

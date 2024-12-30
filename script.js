@@ -132,28 +132,31 @@ function setupEventListeners() {
     map.on('click', function(e) {
         if (!isDrawMode || !isEraser) return;
         
-        const clickPoint = e.latlng;
+        const clickPoint = e.containerPoint; // Klickposition in Pixeln
         const linesToRemove = [];
         
         drawingLayer.eachLayer(function(layer) {
             if (layer instanceof L.Polyline) {
                 const points = layer.getLatLngs();
                 
-                // Vereinfachte Distanzberechnung: Prüfe Abstand zu jedem Punkt
-                let minDistance = Infinity;
-                points.forEach(point => {
-                    const distance = clickPoint.distanceTo(point);
-                    minDistance = Math.min(minDistance, distance);
-                });
-                
-                // Wenn Linie nahe genug ist
-                if (minDistance < 50000) {
-                    linesToRemove.push(layer);
+                // Prüfe jeden Liniensegment
+                for (let i = 0; i < points.length - 1; i++) {
+                    const start = map.latLngToContainerPoint(points[i]);
+                    const end = map.latLngToContainerPoint(points[i + 1]);
+                    
+                    // Berechne die Distanz in Pixeln
+                    const distance = distanceToSegment(clickPoint, start, end);
+                    
+                    // Wenn die Distanz kleiner als 10 Pixel ist
+                    if (distance < 10) {
+                        linesToRemove.push(layer);
+                        break;
+                    }
                 }
             }
         });
 
-        // Gefundene Linien nur aus der Karte entfernen
+        // Gefundene Linien aus der Karte entfernen
         if (linesToRemove.length > 0) {
             linesToRemove.forEach(line => {
                 drawingLayer.removeLayer(line);
@@ -257,9 +260,25 @@ async function loadProject() {
             // Standardmäßig Navigationsmodus aktivieren
             isDrawMode = false;
             const modeToggleBtn = document.getElementById('mode-toggle');
-            modeToggleBtn.textContent = 'Navigation';
+            modeToggleBtn.textContent = 'Zeichnen';
             modeToggleBtn.classList.add('nav-mode');
             document.getElementById('map').classList.add('nav-mode');
+            
+            // Initial alle Kontrollelemente außer mode-toggle ausblenden
+            const controlElements = drawingControls.querySelectorAll('*:not(#mode-toggle)');
+            controlElements.forEach(element => {
+                element.style.display = 'none';
+            });
+            
+            // Alle Map-Interaktionen aktivieren
+            map.dragging.enable();
+            map.touchZoom.enable();
+            map.doubleClickZoom.enable();
+            map.scrollWheelZoom.enable();
+            map.boxZoom.enable();
+            map.keyboard.enable();
+            if (map.tap) map.tap.enable();
+            
         } else {
             throw new Error(data.error || 'Unbekannter Fehler beim Laden des Projekts');
         }
@@ -343,14 +362,21 @@ function toggleMode() {
     isDrawMode = !isDrawMode;
     const modeToggleBtn = document.getElementById('mode-toggle');
     const mapElement = document.getElementById('map');
+    const drawingControls = document.getElementById('drawing-controls');
+    const controlElements = drawingControls.querySelectorAll('*:not(#mode-toggle)');
 
     if (isDrawMode) {
         // Zeichenmodus aktivieren
-        modeToggleBtn.textContent = 'Zeichnen';
+        modeToggleBtn.textContent = 'Navigieren';
         modeToggleBtn.classList.remove('nav-mode');
         modeToggleBtn.classList.add('draw-mode');
         mapElement.classList.add('draw-mode');
         mapElement.classList.remove('nav-mode');
+        
+        // Kontrollelemente anzeigen
+        controlElements.forEach(element => {
+            element.style.display = '';
+        });
         
         // Im Zeichenmodus nur bestimmte Interaktionen deaktivieren
         map.dragging.disable();
@@ -362,11 +388,16 @@ function toggleMode() {
         map.scrollWheelZoom.enable();
     } else {
         // Navigationsmodus aktivieren
-        modeToggleBtn.textContent = 'Navigation';
+        modeToggleBtn.textContent = 'Zeichnen';
         modeToggleBtn.classList.remove('draw-mode');
         modeToggleBtn.classList.add('nav-mode');
         mapElement.classList.remove('draw-mode');
         mapElement.classList.add('nav-mode');
+        
+        // Kontrollelemente ausblenden außer mode-toggle
+        controlElements.forEach(element => {
+            element.style.display = 'none';
+        });
         
         // Alle Interaktionen wieder aktivieren
         map.dragging.enable();
@@ -441,30 +472,21 @@ function stopDrawing(e) {
     currentPath = [];
 }
 
-// Neue verbesserte Funktion zur Distanzberechnung
-function getDistanceFromLine(point, lineStart, lineEnd) {
-    const lat = point.lat;
-    const lng = point.lng;
-    const x1 = lineStart.lat;
-    const y1 = lineStart.lng;
-    const x2 = lineEnd.lat;
-    const y2 = lineEnd.lng;
+// Hilfsfunktion zur Berechnung der Distanz zwischen Punkt und Liniensegment in Pixeln
+function distanceToSegment(p, v, w) {
+    const l2 = dist2(v, w);
+    if (l2 === 0) return dist2(p, v);
+    
+    let t = ((p.x - v.x) * (w.x - v.x) + (p.y - v.y) * (w.y - v.y)) / l2;
+    t = Math.max(0, Math.min(1, t));
+    
+    return Math.sqrt(dist2(p, {
+        x: v.x + t * (w.x - v.x),
+        y: v.y + t * (w.y - v.y)
+    }));
+}
 
-    // Länge der Linie
-    const lineLength = Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2));
-    if (lineLength === 0) return Math.sqrt(Math.pow(lat - x1, 2) + Math.pow(lng - y1, 2));
-
-    // Projektion des Punktes auf die Linie
-    const t = ((lat - x1) * (x2 - x1) + (lng - y1) * (y2 - y1)) / (lineLength * lineLength);
-
-    // Wenn die Projektion außerhalb der Linie liegt, nehme den nächsten Endpunkt
-    if (t < 0) return Math.sqrt(Math.pow(lat - x1, 2) + Math.pow(lng - y1, 2));
-    if (t > 1) return Math.sqrt(Math.pow(lat - x2, 2) + Math.pow(lng - y2, 2));
-
-    // Berechne den nächsten Punkt auf der Linie
-    const projX = x1 + t * (x2 - x1);
-    const projY = y1 + t * (y2 - y1);
-
-    // Berechne die Distanz zu diesem Punkt
-    return Math.sqrt(Math.pow(lat - projX, 2) + Math.pow(lng - projY, 2));
+// Hilfsfunktion zur Berechnung des quadratischen Abstands zwischen zwei Punkten
+function dist2(v, w) {
+    return Math.pow(v.x - w.x, 2) + Math.pow(v.y - w.y, 2);
 } 
