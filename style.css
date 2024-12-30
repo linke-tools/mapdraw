@@ -1,0 +1,132 @@
+#map {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1;
+}
+
+#controls {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    z-index: 1000;
+    background: white;
+    padding: 10px;
+    border-radius: 5px;
+    box-shadow: 0 0 10px rgba(0,0,0,0.2);
+}
+
+#project-name {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 2;
+    background: white;
+    padding: 10px;
+    border-radius: 5px;
+    box-shadow: 0 0 10px rgba(0,0,0,0.2);
+}
+
+.hidden {
+    display: none !important;
+}
+
+.modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.5);
+    z-index: 3;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.modal-content {
+    background: white;
+    padding: 20px;
+    border-radius: 5px;
+    text-align: center;
+}
+
+button {
+    margin: 5px;
+    padding: 5px 10px;
+    cursor: pointer;
+}
+
+.modal-buttons {
+    margin-top: 15px;
+}
+
+.modal-content input {
+    margin: 10px 0;
+    padding: 5px;
+    width: 200px;
+}
+
+#mode-toggle.draw-mode {
+    background-color: #ffebee;
+}
+
+#mode-toggle.nav-mode {
+    background-color: #e3f2fd;
+}
+
+.draw-mode {
+    cursor: crosshair;
+}
+
+.nav-mode {
+    cursor: grab;
+}
+
+.nav-mode:active {
+    cursor: grabbing;
+}
+
+#drawing-controls {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    position: relative;
+    z-index: 1001;
+}
+
+#drawing-controls.hidden {
+    display: none !important;
+}
+
+#drawing-controls #save {
+    background-color: #4CAF50;
+    color: white;
+    border: none;
+    border-radius: 3px;
+    padding: 5px 15px;
+    cursor: pointer;
+    position: relative;
+    z-index: 1002;
+    display: inline-block;
+}
+
+#drawing-controls #save.hidden {
+    display: none !important;
+}
+
+#drawing-controls #save:hover {
+    background-color: #45a049;
+}
+
+#drawing-controls button {
+    flex-shrink: 0;
+}
+
+#drawing-controls:not(.hidden) #save:not(.hidden) {
+    display: inline-block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+} 

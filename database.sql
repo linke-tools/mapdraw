@@ -1,0 +1,20 @@
+CREATE DATABASE map_drawing;
+USE map_drawing;
+
+CREATE TABLE projects (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    lat DECIMAL(10,8) DEFAULT 0,
+    lng DECIMAL(11,8) DEFAULT 0,
+    zoom INT DEFAULT 2,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE drawings (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    project_id INT,
+    path JSON NOT NULL,
+    color VARCHAR(20) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (project_id) REFERENCES projects(id)
+); 

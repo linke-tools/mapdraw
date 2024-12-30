@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Karten-Zeichnung</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css">
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+</head>
+<body>
+    <div id="map"></div>
+    <div id="controls">
+        <div id="project-controls">
+            <button id="create-project" class="hidden">Create project</button>
+            <div id="project-name" class="hidden"></div>
+        </div>
+        <div id="drawing-controls" class="hidden">
+            <button id="mode-toggle">Navigation</button>
+            <input type="color" id="color-picker" value="#ff0000">
+            <button id="eraser">Radiergummi</button>
+            <button id="save" class="hidden">Save</button>
+        </div>
+    </div>
+    <div id="project-modal" class="modal hidden">
+        <div class="modal-content">
+            <h2>Neues Projekt erstellen</h2>
+            <input type="text" id="new-project-name" placeholder="Projektname">
+            <div class="modal-buttons">
+                <button id="create">Create</button>
+                <button id="cancel-create">Cancel</button>
+            </div>
+        </div>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html> 
