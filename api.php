@@ -51,6 +51,16 @@ switch($action) {
         ]);
 }
 
+function generateUUID() {
+    return sprintf('%04x%04x-%04x-%04x-%04x-%04x%04x%04x',
+        mt_rand(0, 0xffff), mt_rand(0, 0xffff),
+        mt_rand(0, 0xffff),
+        mt_rand(0, 0x0fff) | 0x4000,
+        mt_rand(0, 0x3fff) | 0x8000,
+        mt_rand(0, 0xffff), mt_rand(0, 0xffff), mt_rand(0, 0xffff)
+    );
+}
+
 function createProject($db, $data) {
     if (empty($data['name'])) {
         echo json_encode([
@@ -61,12 +71,13 @@ function createProject($db, $data) {
     }
 
     try {
-        $stmt = $db->prepare('INSERT INTO projects (name) VALUES (?)');
-        $stmt->execute([$data['name']]);
+        $projectId = generateUUID();
+        $stmt = $db->prepare('INSERT INTO projects (id, name) VALUES (?, ?)');
+        $stmt->execute([$projectId, $data['name']]);
         
         echo json_encode([
             'success' => true,
-            'projectId' => $db->lastInsertId()
+            'projectId' => $projectId
         ]);
     } catch (PDOException $e) {
         echo json_encode([

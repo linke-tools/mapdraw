@@ -15,6 +15,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const urlParams = new URLSearchParams(window.location.search);
     projectId = urlParams.get('project');
 
+    // Validiere UUID Format
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (projectId && !uuidRegex.test(projectId)) {
+        console.error('Ungültige Projekt-ID');
+        document.getElementById('create-project').classList.remove('hidden');
+        return;
+    }
+
     // WICHTIG: Zuerst alle UI-Elemente verstecken
     document.getElementById('project-modal').classList.add('hidden');
     document.getElementById('project-name').classList.add('hidden');
@@ -227,7 +235,22 @@ async function loadProject() {
             drawingControls.classList.remove('hidden');
             
             document.getElementById('project-name').classList.remove('hidden');
-            document.getElementById('project-name').textContent = data.name;
+            document.getElementById('project-name-text').textContent = data.name;
+            
+            // Kopier-Button Event Listener
+            document.getElementById('copy-link').addEventListener('click', function() {
+                const url = window.location.href;
+                navigator.clipboard.writeText(url).then(() => {
+                    // Visuelles Feedback
+                    const copyButton = this;
+                    copyButton.classList.add('copied');
+                    setTimeout(() => {
+                        copyButton.classList.remove('copied');
+                    }, 1500);
+                }).catch(err => {
+                    console.error('Fehler beim Kopieren:', err);
+                });
+            });
             
             // Save-Button initial verstecken
             document.getElementById('save').classList.add('hidden');

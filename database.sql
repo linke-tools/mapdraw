@@ -2,7 +2,7 @@ CREATE DATABASE map_drawing;
 USE map_drawing;
 
 CREATE TABLE projects (
-    id INT AUTO_INCREMENT PRIMARY KEY,
+    id CHAR(36) PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
     lat DECIMAL(10,8) DEFAULT 0,
     lng DECIMAL(11,8) DEFAULT 0,
@@ -12,7 +12,7 @@ CREATE TABLE projects (
 
 CREATE TABLE drawings (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    project_id INT,
+    project_id CHAR(36),
     path JSON NOT NULL,
     color VARCHAR(20) NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
