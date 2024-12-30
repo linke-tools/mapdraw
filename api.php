@@ -33,6 +33,17 @@ switch($action) {
     case 'save':
         saveProject($db, $input);
         break;
+    case 'delete_line':
+        if (!isset($input['projectId']) || !isset($input['lineId'])) {
+            echo json_encode(['success' => false, 'error' => 'Missing parameters']);
+            exit;
+        }
+        
+        $stmt = $db->prepare('DELETE FROM drawings WHERE id = ? AND project_id = ?');
+        $success = $stmt->execute([$input['lineId'], $input['projectId']]);
+        
+        echo json_encode(['success' => $success]);
+        break;
     default:
         echo json_encode([
             'success' => false, 
@@ -110,20 +121,53 @@ function saveProject($db, $data) {
         $data['projectId']
     ]);
     
-    // Alte Zeichnungen löschen
-    $stmt = $db->prepare('DELETE FROM drawings WHERE project_id = ?');
-    $stmt->execute([$data['projectId']]);
+    // Alle Zeichnungen löschen, die nicht mehr in den neuen Zeichnungen enthalten sind
+    $newDrawingIds = array_column(array_filter($data['drawings'], function($d) {
+        return isset($d['id']);
+    }), 'id');
     
-    // Neue Zeichnungen speichern
-    $stmt = $db->prepare('INSERT INTO drawings (project_id, path, color) VALUES (?, ?, ?)');
-    foreach ($data['drawings'] as $drawing) {
-        $stmt->execute([
-            $data['projectId'],
-            json_encode($drawing['path']),
-            $drawing['color']
-        ]);
+    if (!empty($newDrawingIds)) {
+        $placeholders = str_repeat('?,', count($newDrawingIds) - 1) . '?';
+        $stmt = $db->prepare("DELETE FROM drawings WHERE project_id = ? AND id NOT IN ($placeholders)");
+        array_unshift($newDrawingIds, $data['projectId']);
+        $stmt->execute($newDrawingIds);
+    } else {
+        // Wenn keine IDs vorhanden sind, alle alten Zeichnungen löschen
+        $stmt = $db->prepare('DELETE FROM drawings WHERE project_id = ?');
+        $stmt->execute([$data['projectId']]);
     }
     
-    echo json_encode(['success' => true]);
+    // Neue Zeichnungen speichern oder aktualisieren
+    $updateStmt = $db->prepare('UPDATE drawings SET path = ?, color = ? WHERE id = ? AND project_id = ?');
+    $insertStmt = $db->prepare('INSERT INTO drawings (project_id, path, color) VALUES (?, ?, ?)');
+    
+    foreach ($data['drawings'] as $drawing) {
+        if (isset($drawing['id'])) {
+            // Bestehende Zeichnung aktualisieren
+            $updateStmt->execute([
+                json_encode($drawing['path']),
+                $drawing['color'],
+                $drawing['id'],
+                $data['projectId']
+            ]);
+        } else {
+            // Neue Zeichnung einfügen
+            $insertStmt->execute([
+                $data['projectId'],
+                json_encode($drawing['path']),
+                $drawing['color']
+            ]);
+        }
+    }
+    
+    // IDs der gespeicherten Zeichnungen zurückgeben
+    $stmt = $db->prepare('SELECT id, path FROM drawings WHERE project_id = ?');
+    $stmt->execute([$data['projectId']]);
+    $drawings = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    
+    echo json_encode([
+        'success' => true,
+        'drawings' => $drawings
+    ]);
 }
 ?> 

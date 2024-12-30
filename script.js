@@ -97,8 +97,16 @@ function setupEventListeners() {
     });
     
     document.getElementById('eraser').addEventListener('click', () => {
-        isEraser = true;
-        showSaveButton();
+        isEraser = !isEraser; // Toggle Radierer
+        const eraserBtn = document.getElementById('eraser');
+        if (isEraser) {
+            eraserBtn.classList.add('active');
+            // Cursor ändern um zu zeigen dass der Radierer aktiv ist
+            document.getElementById('map').style.cursor = 'crosshair';
+        } else {
+            eraserBtn.classList.remove('active');
+            document.getElementById('map').style.cursor = '';
+        }
     });
     
     document.getElementById('create-project').addEventListener('click', showProjectModal);
@@ -119,6 +127,40 @@ function setupEventListeners() {
     // Mode Toggle Button
     const modeToggleBtn = document.getElementById('mode-toggle');
     modeToggleBtn.addEventListener('click', toggleMode);
+
+    // Klick-Handler für das Löschen von Linien anpassen
+    map.on('click', function(e) {
+        if (!isDrawMode || !isEraser) return;
+        
+        const clickPoint = e.latlng;
+        const linesToRemove = [];
+        
+        drawingLayer.eachLayer(function(layer) {
+            if (layer instanceof L.Polyline) {
+                const points = layer.getLatLngs();
+                
+                // Vereinfachte Distanzberechnung: Prüfe Abstand zu jedem Punkt
+                let minDistance = Infinity;
+                points.forEach(point => {
+                    const distance = clickPoint.distanceTo(point);
+                    minDistance = Math.min(minDistance, distance);
+                });
+                
+                // Wenn Linie nahe genug ist
+                if (minDistance < 50000) {
+                    linesToRemove.push(layer);
+                }
+            }
+        });
+
+        // Gefundene Linien nur aus der Karte entfernen
+        if (linesToRemove.length > 0) {
+            linesToRemove.forEach(line => {
+                drawingLayer.removeLayer(line);
+            });
+            showSaveButton();
+        }
+    });
 }
 
 function updateDrawing() {
@@ -199,10 +241,13 @@ async function loadProject() {
                 data.drawings.forEach(drawing => {
                     try {
                         const path = JSON.parse(drawing.path);
-                        L.polyline(path, {
+                        const line = L.polyline(path, {
                             color: drawing.color,
                             weight: 3
-                        }).addTo(drawingLayer);
+                        });
+                        // ID der Linie speichern
+                        line.lineId = drawing.id;
+                        line.addTo(drawingLayer);
                     } catch (e) {
                         console.error('Fehler beim Parsen der Zeichnung:', e);
                     }
@@ -236,6 +281,7 @@ async function saveChanges() {
         drawingLayer.eachLayer(layer => {
             if (layer instanceof L.Polyline && !layer._tempLine) {
                 drawings.push({
+                    id: layer.lineId, // ID mit speichern wenn vorhanden
                     path: layer.getLatLngs(),
                     color: layer.options.color
                 });
@@ -259,20 +305,31 @@ async function saveChanges() {
         });
 
         const data = await response.json();
-        console.log('Save response:', data);
-        
         if (data.success) {
             hasUnsavedChanges = false;
             document.getElementById('save').classList.add('hidden');
+            
+            // Neue IDs den Linien zuweisen
+            if (data.drawings) {
+                drawingLayer.eachLayer(layer => {
+                    if (layer instanceof L.Polyline) {
+                        const drawing = data.drawings.find(d => 
+                            JSON.stringify(d.path) === JSON.stringify(layer.getLatLngs())
+                        );
+                        if (drawing) {
+                            layer.lineId = drawing.id;
+                        }
+                    }
+                });
+            }
+            
             console.log('Projekt erfolgreich gespeichert');
         } else {
             console.error('Fehler beim Speichern:', data.error);
-            // Save-Button sichtbar lassen bei Fehler
             showSaveButton();
         }
     } catch (error) {
         console.error('Fehler beim Speichern:', error);
-        // Save-Button sichtbar lassen bei Fehler
         showSaveButton();
     }
 }
@@ -382,4 +439,32 @@ function stopDrawing(e) {
         showSaveButton();
     }
     currentPath = [];
+}
+
+// Neue verbesserte Funktion zur Distanzberechnung
+function getDistanceFromLine(point, lineStart, lineEnd) {
+    const lat = point.lat;
+    const lng = point.lng;
+    const x1 = lineStart.lat;
+    const y1 = lineStart.lng;
+    const x2 = lineEnd.lat;
+    const y2 = lineEnd.lng;
+
+    // Länge der Linie
+    const lineLength = Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2));
+    if (lineLength === 0) return Math.sqrt(Math.pow(lat - x1, 2) + Math.pow(lng - y1, 2));
+
+    // Projektion des Punktes auf die Linie
+    const t = ((lat - x1) * (x2 - x1) + (lng - y1) * (y2 - y1)) / (lineLength * lineLength);
+
+    // Wenn die Projektion außerhalb der Linie liegt, nehme den nächsten Endpunkt
+    if (t < 0) return Math.sqrt(Math.pow(lat - x1, 2) + Math.pow(lng - y1, 2));
+    if (t > 1) return Math.sqrt(Math.pow(lat - x2, 2) + Math.pow(lng - y2, 2));
+
+    // Berechne den nächsten Punkt auf der Linie
+    const projX = x1 + t * (x2 - x1);
+    const projY = y1 + t * (y2 - y1);
+
+    // Berechne die Distanz zu diesem Punkt
+    return Math.sqrt(Math.pow(lat - projX, 2) + Math.pow(lng - projY, 2));
 } 

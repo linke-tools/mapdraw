@@ -160,4 +160,14 @@ button {
     display: inline-block !important;
     visibility: visible !important;
     opacity: 1 !important;
+}
+
+#eraser.active {
+    background-color: #ff4444;
+    color: white;
+}
+
+/* Cursor-Styles für den Radierer */
+#map.eraser-active {
+    cursor: crosshair;
 } 
