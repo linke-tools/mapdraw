@@ -23,7 +23,13 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('save').classList.add('hidden');
 
     // Map initialisieren
-    map = L.map('map').setView([0, 0], 2);
+    map = L.map('map', {
+        zoomControl: true,
+        tap: true,
+        touchZoom: true,
+        bounceAtZoomLimits: true,
+        maxBoundsViscosity: 0.8
+    }).setView([0, 0], 2);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '© OpenStreetMap contributors'
     }).addTo(map);
@@ -41,51 +47,49 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function setupEventListeners() {
-    // Leaflet map events statt HTML element events verwenden
-    map.on('mousedown', function(e) {
-        if (!projectId || !isDrawMode) return;
-        isDrawing = true;
-        currentPath = [];
-        currentPath.push(e.latlng);
-    });
+    // Mouse Events
+    map.on('mousedown', startDrawing);
+    map.on('mousemove', draw);
+    map.on('mouseup', stopDrawing);
     
-    map.on('mousemove', function(e) {
-        if (!isDrawing || !projectId || !isDrawMode) return;
-        currentPath.push(e.latlng);
-        updateDrawing();
-    });
-    
-    map.on('mouseup', function() {
-        if (!isDrawing || !projectId || !isDrawMode) return;
-        isDrawing = false;
-        if (currentPath.length > 1) {
-            // Temporäre Linie entfernen
-            if (currentTempLine) {
-                drawingLayer.removeLayer(currentTempLine);
-                currentTempLine = null;
-            }
+    // Touch Events für Zeichnen
+    let touchDrawing = false;
 
-            // Permanente Linie hinzufügen
-            const line = L.polyline(currentPath, {
-                color: isEraser ? 'transparent' : currentColor,
-                weight: isEraser ? 20 : 3
-            });
-            drawingLayer.addLayer(line);
-            
-            // Save-Button anzeigen
-            showSaveButton();
-            
-            // Debug-Ausgabe nach dem Anzeigen
-            const saveButton = document.getElementById('save');
-            const drawingControls = document.getElementById('drawing-controls');
-            console.log('After showing save button:');
-            console.log('Drawing controls hidden:', drawingControls.classList.contains('hidden'));
-            console.log('Save button hidden:', saveButton.classList.contains('hidden'));
-            console.log('Save button display:', window.getComputedStyle(saveButton).display);
+    map.on('touchstart', function(e) {
+        if (!projectId || !isDrawMode) return;
+        // Wenn es ein Single-Touch ist, starten wir das Zeichnen
+        if (e.touches.length === 1) {
+            touchDrawing = true;
+            isDrawing = true;
+            currentPath = [];
+            const touch = e.touches[0];
+            const point = map.mouseEventToLatLng(touch);
+            currentPath.push(point);
+            // Nur für Single-Touch-Zeichnen das Standard-Verhalten verhindern
+            e.originalEvent.preventDefault();
         }
-        currentPath = [];
     });
     
+    map.on('touchmove', function(e) {
+        if (!projectId || !isDrawMode || !touchDrawing) return;
+        // Nur für Single-Touch zeichnen
+        if (e.touches.length === 1) {
+            const touch = e.touches[0];
+            const point = map.mouseEventToLatLng(touch);
+            currentPath.push(point);
+            updateDrawing();
+            // Nur für Single-Touch-Zeichnen das Standard-Verhalten verhindern
+            e.originalEvent.preventDefault();
+        }
+    });
+    
+    map.on('touchend', function(e) {
+        if (touchDrawing) {
+            touchDrawing = false;
+            stopDrawing(e);
+        }
+    });
+
     // UI Controls
     document.getElementById('color-picker').addEventListener('change', (e) => {
         currentColor = e.target.value;
@@ -291,14 +295,14 @@ function toggleMode() {
         mapElement.classList.add('draw-mode');
         mapElement.classList.remove('nav-mode');
         
-        // Karte einfrieren
+        // Im Zeichenmodus nur bestimmte Interaktionen deaktivieren
         map.dragging.disable();
-        map.touchZoom.disable();
-        map.doubleClickZoom.disable();
-        map.scrollWheelZoom.disable();
         map.boxZoom.disable();
         map.keyboard.disable();
-        if (map.tap) map.tap.disable();
+        // Zoom-Funktionen aktiviert lassen
+        map.touchZoom.enable();
+        map.doubleClickZoom.enable();
+        map.scrollWheelZoom.enable();
     } else {
         // Navigationsmodus aktivieren
         modeToggleBtn.textContent = 'Navigation';
@@ -307,7 +311,7 @@ function toggleMode() {
         mapElement.classList.remove('draw-mode');
         mapElement.classList.add('nav-mode');
         
-        // Karte freigeben
+        // Alle Interaktionen wieder aktivieren
         map.dragging.enable();
         map.touchZoom.enable();
         map.doubleClickZoom.enable();
@@ -343,4 +347,39 @@ function debugSaveButton() {
     console.log('Save button visibility:', window.getComputedStyle(saveButton).visibility);
     console.log('Drawing controls hidden:', drawingControls.classList.contains('hidden'));
     console.log('Drawing controls display:', window.getComputedStyle(drawingControls).display);
+}
+
+// Separate Funktionen für das Zeichnen
+function startDrawing(e) {
+    if (!projectId || !isDrawMode) return;
+    isDrawing = true;
+    currentPath = [];
+    currentPath.push(e.latlng);
+}
+
+function draw(e) {
+    if (!isDrawing || !projectId || !isDrawMode) return;
+    currentPath.push(e.latlng);
+    updateDrawing();
+}
+
+function stopDrawing(e) {
+    if (!isDrawing || !projectId || !isDrawMode) return;
+    isDrawing = false;
+    if (currentPath.length > 1) {
+        // Temporäre Linie entfernen
+        if (currentTempLine) {
+            drawingLayer.removeLayer(currentTempLine);
+            currentTempLine = null;
+        }
+
+        // Permanente Linie hinzufügen
+        const line = L.polyline(currentPath, {
+            color: isEraser ? 'transparent' : currentColor,
+            weight: isEraser ? 20 : 3
+        });
+        drawingLayer.addLayer(line);
+        showSaveButton();
+    }
+    currentPath = [];
 } 
