@@ -174,6 +174,19 @@ function setupEventListeners() {
             showSaveButton();
         }
     });
+
+    // Neue Event Listener für Map-Bewegungen
+    map.on('moveend', function() {
+        if (projectId) {
+            showSaveButton();
+        }
+    });
+
+    map.on('zoomend', function() {
+        if (projectId) {
+            showSaveButton();
+        }
+    });
 }
 
 function updateDrawing() {
@@ -326,7 +339,7 @@ async function saveChanges() {
         drawingLayer.eachLayer(layer => {
             if (layer instanceof L.Polyline && !layer._tempLine) {
                 drawings.push({
-                    id: layer.lineId, // ID mit speichern wenn vorhanden
+                    id: layer.lineId,
                     path: layer.getLatLngs(),
                     color: layer.options.color
                 });
