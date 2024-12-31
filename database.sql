@@ -1,5 +1,5 @@
-CREATE DATABASE map_drawing;
-USE map_drawing;
+CREATE DATABASE map_drawing_dev;
+USE map_drawing_dev;
 
 CREATE TABLE projects (
     id CHAR(36) PRIMARY KEY,

@@ -4,7 +4,7 @@ header('Content-Type: application/json');
 try {
     // TCP Verbindung
     $db = new PDO(
-        'mysql:host=127.0.0.1;dbname=map_drawing',
+        'mysql:host=127.0.0.1;dbname=map_drawing_dev',
         'maps',
         'thaeX7ooho'
     );
