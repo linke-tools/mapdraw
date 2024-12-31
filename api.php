@@ -55,6 +55,17 @@ switch($action) {
             'activeUsers' => $activeUsers
         ]);
         break;
+    case 'check_updates':
+        if (!isset($_GET['project']) || !isset($_GET['lastUpdate'])) {
+            echo json_encode(['success' => false, 'error' => 'Missing parameters']);
+            exit;
+        }
+        $updates = checkUpdates($db, $_GET['project'], $_GET['lastUpdate']);
+        echo json_encode([
+            'success' => true,
+            'updates' => $updates
+        ]);
+        break;
     default:
         echo json_encode([
             'success' => false, 
@@ -216,5 +227,26 @@ function updateActiveUsers($db, $projectId, $sessionId) {
                          WHERE project_id = ?');
     $stmt->execute([$projectId]);
     return $stmt->fetch(PDO::FETCH_ASSOC)['count'];
+}
+
+// Neue Funktion für Updates
+function checkUpdates($db, $projectId, $lastUpdate) {
+    // Neue Zeichnungen seit dem letzten Update abrufen
+    $stmt = $db->prepare('SELECT * FROM drawings 
+                         WHERE project_id = ? 
+                         AND created_at > FROM_UNIXTIME(?)');
+    $stmt->execute([$projectId, $lastUpdate]);
+    $newDrawings = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    
+    // Alle aktuell existierenden Linien-IDs abrufen
+    $stmt = $db->prepare('SELECT id FROM drawings WHERE project_id = ?');
+    $stmt->execute([$projectId]);
+    $existingIds = $stmt->fetchAll(PDO::FETCH_COLUMN);
+    
+    return [
+        'new' => $newDrawings,
+        'existingIds' => $existingIds,
+        'timestamp' => time()
+    ];
 }
 ?> 

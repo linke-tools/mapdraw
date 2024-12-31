@@ -15,6 +15,9 @@ let addedLines = new Set();
 let deletedLines = new Set();
 let modifiedLines = new Set();
 
+// Neue Variable für den Zeitstempel des letzten Updates
+let lastUpdate = Math.floor(Date.now() / 1000);
+
 // Initialisierung
 document.addEventListener('DOMContentLoaded', () => {
     // URL Parameter auslesen
@@ -368,6 +371,8 @@ async function loadProject() {
         map.keyboard.enable();
         if (map.tap) map.tap.enable();
         
+        // Regelmäßiges Prüfen auf Updates
+        setInterval(checkForUpdates, 2000); // Alle 2 Sekunden
     } catch (error) {
         showError('Fehler beim Laden des Projekts');
         setTimeout(() => {
@@ -389,7 +394,8 @@ async function saveChanges() {
         };
 
         // Neue Linien sammeln
-        addedLines.forEach(layer => {
+        const addedLinesArray = Array.from(addedLines);
+        addedLinesArray.forEach(layer => {
             if (layer instanceof L.Polyline) {
                 changes.added.push({
                     path: layer.getLatLngs(),
@@ -426,15 +432,18 @@ async function saveChanges() {
             
             // Neue IDs den Linien zuweisen
             if (data.newLines) {
-                addedLines.forEach(layer => {
-                    const newLine = data.newLines.shift();
+                addedLinesArray.forEach((layer, index) => {
+                    const newLine = data.newLines[index];
                     if (newLine) {
                         layer.lineId = newLine.id;
                     }
                 });
             }
             
-            // Änderungslisten zurücksetzen
+            // Sofort ein Update durchführen
+            await checkForUpdates();
+            
+            // Erst nach erfolgreichem Update die Änderungslisten zurücksetzen
             addedLines.clear();
             deletedLines.clear();
             modifiedLines.clear();
@@ -606,4 +615,46 @@ function showError(message) {
     setTimeout(() => {
         errorDiv.classList.remove('show');
     }, 2000);
+}
+
+// Neue Funktion für das Prüfen auf Updates
+async function checkForUpdates() {
+    if (!projectId) return;
+    
+    try {
+        const response = await fetch(`api.php?action=check_updates&project=${projectId}&lastUpdate=${lastUpdate}`);
+        const data = await response.json();
+        
+        if (data.success) {
+            // Neue Zeichnungen hinzufügen
+            data.updates.new.forEach(drawing => {
+                // Prüfen ob die Zeichnung nicht von uns selbst kommt
+                if (!Array.from(addedLines).some(line => line.lineId === drawing.id)) {
+                    const path = JSON.parse(drawing.path);
+                    const line = L.polyline(path, {
+                        color: drawing.color,
+                        weight: 3
+                    });
+                    line.lineId = drawing.id;
+                    drawingLayer.addLayer(line);
+                }
+            });
+            
+            // Prüfen welche lokalen Linien nicht mehr existieren
+            const existingIds = new Set(data.updates.existingIds);
+            drawingLayer.eachLayer(layer => {
+                if (layer instanceof L.Polyline && layer.lineId) {
+                    // Nur Linien mit ID prüfen und keine neu hinzugefügten Linien
+                    if (!existingIds.has(layer.lineId) && !addedLines.has(layer)) {
+                        drawingLayer.removeLayer(layer);
+                    }
+                }
+            });
+            
+            // Zeitstempel aktualisieren
+            lastUpdate = data.updates.timestamp;
+        }
+    } catch (error) {
+        console.error('Fehler beim Prüfen auf Updates:', error);
+    }
 } 
