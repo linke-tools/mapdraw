@@ -143,6 +143,7 @@ function loadProject($db, $projectId) {
 }
 
 function saveProject($db, $data) {
+    // Position und Zoom speichern
     $stmt = $db->prepare('UPDATE projects SET lat = ?, lng = ?, zoom = ? WHERE id = ?');
     $stmt->execute([
         $data['lat'],
@@ -151,53 +152,49 @@ function saveProject($db, $data) {
         $data['projectId']
     ]);
     
-    // Alle Zeichnungen löschen, die nicht mehr in den neuen Zeichnungen enthalten sind
-    $newDrawingIds = array_column(array_filter($data['drawings'], function($d) {
-        return isset($d['id']);
-    }), 'id');
+    $changes = $data['changes'];
     
-    if (!empty($newDrawingIds)) {
-        $placeholders = str_repeat('?,', count($newDrawingIds) - 1) . '?';
-        $stmt = $db->prepare("DELETE FROM drawings WHERE project_id = ? AND id NOT IN ($placeholders)");
-        array_unshift($newDrawingIds, $data['projectId']);
-        $stmt->execute($newDrawingIds);
-    } else {
-        // Wenn keine IDs vorhanden sind, alle alten Zeichnungen löschen
-        $stmt = $db->prepare('DELETE FROM drawings WHERE project_id = ?');
-        $stmt->execute([$data['projectId']]);
+    // Gelöschte Linien entfernen
+    if (!empty($changes['deleted'])) {
+        $placeholders = str_repeat('?,', count($changes['deleted']) - 1) . '?';
+        $stmt = $db->prepare("DELETE FROM drawings WHERE id IN ($placeholders) AND project_id = ?");
+        $params = $changes['deleted'];
+        $params[] = $data['projectId'];
+        $stmt->execute($params);
     }
     
-    // Neue Zeichnungen speichern oder aktualisieren
-    $updateStmt = $db->prepare('UPDATE drawings SET path = ?, color = ? WHERE id = ? AND project_id = ?');
+    // Neue Linien einfügen
     $insertStmt = $db->prepare('INSERT INTO drawings (project_id, path, color) VALUES (?, ?, ?)');
+    $newLines = [];
     
-    foreach ($data['drawings'] as $drawing) {
-        if (isset($drawing['id'])) {
-            // Bestehende Zeichnung aktualisieren
+    foreach ($changes['added'] as $drawing) {
+        $insertStmt->execute([
+            $data['projectId'],
+            json_encode($drawing['path']),
+            $drawing['color']
+        ]);
+        $newLines[] = [
+            'id' => $db->lastInsertId(),
+            'path' => $drawing['path']
+        ];
+    }
+    
+    // Modifizierte Linien aktualisieren (falls implementiert)
+    if (!empty($changes['modified'])) {
+        $updateStmt = $db->prepare('UPDATE drawings SET path = ?, color = ? WHERE id = ? AND project_id = ?');
+        foreach ($changes['modified'] as $drawing) {
             $updateStmt->execute([
                 json_encode($drawing['path']),
                 $drawing['color'],
                 $drawing['id'],
                 $data['projectId']
             ]);
-        } else {
-            // Neue Zeichnung einfügen
-            $insertStmt->execute([
-                $data['projectId'],
-                json_encode($drawing['path']),
-                $drawing['color']
-            ]);
         }
     }
     
-    // IDs der gespeicherten Zeichnungen zurückgeben
-    $stmt = $db->prepare('SELECT id, path FROM drawings WHERE project_id = ?');
-    $stmt->execute([$data['projectId']]);
-    $drawings = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    
     echo json_encode([
         'success' => true,
-        'drawings' => $drawings
+        'newLines' => $newLines
     ]);
 }
 

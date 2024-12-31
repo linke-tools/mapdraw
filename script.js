@@ -10,6 +10,11 @@ let isDrawMode = false; // Standardmäßig Navigationsmodus
 let currentTempLine = null; // Neue Variable für temporäre Linie
 let sessionId = null;
 
+// Neue Variablen für das Tracking von Änderungen
+let addedLines = new Set();
+let deletedLines = new Set();
+let modifiedLines = new Set();
+
 // Initialisierung
 document.addEventListener('DOMContentLoaded', () => {
     // URL Parameter auslesen
@@ -161,6 +166,9 @@ function setupEventListeners() {
                     // Wenn die Distanz kleiner als 10 Pixel ist
                     if (distance < 10) {
                         linesToRemove.push(layer);
+                        if (layer.lineId) {
+                            deletedLines.add(layer.lineId); // Gelöschte Linie markieren
+                        }
                         break;
                     }
                 }
@@ -374,18 +382,28 @@ async function saveChanges() {
         const center = map.getCenter();
         const zoom = map.getZoom();
         
-        const drawings = [];
-        drawingLayer.eachLayer(layer => {
-            if (layer instanceof L.Polyline && !layer._tempLine) {
-                drawings.push({
-                    id: layer.lineId,
+        const changes = {
+            added: [],
+            deleted: Array.from(deletedLines),
+            modified: Array.from(modifiedLines)
+        };
+
+        // Neue Linien sammeln
+        addedLines.forEach(layer => {
+            if (layer instanceof L.Polyline) {
+                changes.added.push({
                     path: layer.getLatLngs(),
                     color: layer.options.color
                 });
             }
         });
 
-        console.log('Sending drawings:', drawings.length);
+        console.log('Sending changes:', {
+            added: changes.added.length,
+            deleted: changes.deleted.length,
+            modified: changes.modified.length
+        });
+
         const response = await fetch('api.php', {
             method: 'POST',
             headers: {
@@ -397,7 +415,7 @@ async function saveChanges() {
                 lat: center.lat,
                 lng: center.lng,
                 zoom: zoom,
-                drawings: drawings
+                changes: changes
             })
         });
 
@@ -407,18 +425,19 @@ async function saveChanges() {
             document.getElementById('save').classList.add('hidden');
             
             // Neue IDs den Linien zuweisen
-            if (data.drawings) {
-                drawingLayer.eachLayer(layer => {
-                    if (layer instanceof L.Polyline) {
-                        const drawing = data.drawings.find(d => 
-                            JSON.stringify(d.path) === JSON.stringify(layer.getLatLngs())
-                        );
-                        if (drawing) {
-                            layer.lineId = drawing.id;
-                        }
+            if (data.newLines) {
+                addedLines.forEach(layer => {
+                    const newLine = data.newLines.shift();
+                    if (newLine) {
+                        layer.lineId = newLine.id;
                     }
                 });
             }
+            
+            // Änderungslisten zurücksetzen
+            addedLines.clear();
+            deletedLines.clear();
+            modifiedLines.clear();
             
             console.log('Projekt erfolgreich gespeichert');
         } else {
@@ -545,6 +564,7 @@ function stopDrawing(e) {
             weight: isEraser ? 20 : 3
         });
         drawingLayer.addLayer(line);
+        addedLines.add(line); // Neue Linie als hinzugefügt markieren
         showSaveButton();
     }
     currentPath = [];
