@@ -284,6 +284,7 @@ async function createProject() {
         const data = await response.json();
         if (data.success) {
             window.location.href = `?project=${data.projectId}`;
+            document.title = name;
         } else {
             console.error('Projekt konnte nicht erstellt werden:', data.error);
         }
@@ -314,7 +315,10 @@ async function loadProject() {
         // Session ID speichern
         sessionId = data.sessionId;
         
-        // Projektname und aktive Benutzer anzeigen
+        // Projektnamen als Titel setzen
+        document.title = data.name;
+        
+        // Projektname im UI anzeigen
         document.getElementById('project-name').classList.remove('hidden');
         document.getElementById('project-name-text').textContent = data.name;
         
@@ -457,6 +461,8 @@ async function loadProject() {
         document.getElementById('color-picker').value = currentColor;
     } catch (error) {
         showError('Fehler beim Laden des Projekts');
+        // Titel zurücksetzen
+        document.title = 'Collaborative Drawing';
         setTimeout(() => {
             window.location.href = window.location.pathname;
         }, 2000);
