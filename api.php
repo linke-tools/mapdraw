@@ -1,21 +1,11 @@
 <?php
-header('Content-Type: application/json');
+// Sicherheitscheck definieren
+define('SECURE_ACCESS', true);
 
-try {
-    // TCP Verbindung
-    $db = new PDO(
-        'mysql:host=127.0.0.1;dbname=map_drawing_dev',
-        'maps',
-        'thaeX7ooho'
-    );
-    $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-} catch (PDOException $e) {
-    echo json_encode([
-        'success' => false,
-        'error' => 'Datenbankverbindung fehlgeschlagen: ' . $e->getMessage()
-    ]);
-    exit;
-}
+// Datenbank einbinden
+require_once 'db.php';
+
+header('Content-Type: application/json');
 
 // JSON Body auslesen
 $input = json_decode(file_get_contents('php://input'), true);
