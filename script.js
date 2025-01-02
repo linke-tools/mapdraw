@@ -16,7 +16,7 @@ let deletedLines = new Set();
 let modifiedLines = new Set();
 
 // Neue Variable für den Zeitstempel des letzten Updates
-let lastUpdate = Math.floor(Date.now() / 1000);
+let lastUpdate = 0; // Wird mit Server-Zeit initialisiert
 
 // Initialisierung
 document.addEventListener('DOMContentLoaded', () => {
@@ -56,6 +56,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('drawing-controls').classList.add('hidden');
     document.getElementById('create-project').classList.add('hidden');
     document.getElementById('save').classList.add('hidden');
+    hasUnsavedChanges = false;
     
     // Dann erst die Projekt-Logik ausführen
     if (projectId) {
@@ -322,12 +323,34 @@ async function loadProject() {
         });
         
         // Save-Button initial verstecken
-        document.getElementById('save').classList.add('hidden');
+        const saveButton = document.getElementById('save');
+        saveButton.classList.remove('show');
+        saveButton.classList.add('hidden');
         hasUnsavedChanges = false;
         
         // Karten-Position setzen
         if (data.lat && data.lng && data.zoom) {
+            // Map-Events temporär deaktivieren
+            map.off('moveend');
+            map.off('zoomend');
+            
+            // Position setzen
             map.setView([data.lat, data.lng], data.zoom);
+            
+            // Nach kurzer Verzögerung Map-Events wieder aktivieren
+            setTimeout(() => {
+                map.on('moveend', function() {
+                    if (projectId) {
+                        showSaveButton();
+                    }
+                });
+
+                map.on('zoomend', function() {
+                    if (projectId) {
+                        showSaveButton();
+                    }
+                });
+            }, 1000); // 1 Sekunde warten
         }
         
         // Zeichnungen laden
@@ -373,6 +396,9 @@ async function loadProject() {
         
         // Regelmäßiges Prüfen auf Updates
         setInterval(checkForUpdates, 2000); // Alle 2 Sekunden
+
+        // Server-Zeitstempel übernehmen
+        lastUpdate = data.serverTime;
     } catch (error) {
         showError('Fehler beim Laden des Projekts');
         setTimeout(() => {
@@ -387,22 +413,20 @@ async function saveChanges() {
         const center = map.getCenter();
         const zoom = map.getZoom();
         
+        // Kopie der zu speichernden Linien erstellen
+        const linesToSave = Array.from(addedLines).map(layer => ({
+            layer: layer,
+            data: {
+                path: layer.getLatLngs(),
+                color: layer.options.color
+            }
+        }));
+
         const changes = {
-            added: [],
+            added: linesToSave.map(item => item.data),
             deleted: Array.from(deletedLines),
             modified: Array.from(modifiedLines)
         };
-
-        // Neue Linien sammeln
-        const addedLinesArray = Array.from(addedLines);
-        addedLinesArray.forEach(layer => {
-            if (layer instanceof L.Polyline) {
-                changes.added.push({
-                    path: layer.getLatLngs(),
-                    color: layer.options.color
-                });
-            }
-        });
 
         console.log('Sending changes:', {
             added: changes.added.length,
@@ -427,28 +451,44 @@ async function saveChanges() {
 
         const data = await response.json();
         if (data.success) {
-            hasUnsavedChanges = false;
-            document.getElementById('save').classList.add('hidden');
-            
             // Neue IDs den Linien zuweisen
             if (data.newLines) {
-                addedLinesArray.forEach((layer, index) => {
+                linesToSave.forEach((item, index) => {
                     const newLine = data.newLines[index];
                     if (newLine) {
-                        layer.lineId = newLine.id;
+                        // ID der existierenden Linie aktualisieren
+                        item.layer.lineId = newLine.id;
                     }
                 });
             }
             
-            // Sofort ein Update durchführen
-            await checkForUpdates();
+            // Warten auf das nächste Update bevor wir die Linien aus addedLines entfernen
+            const checkResponse = await fetch(`api.php?action=check_updates&project=${projectId}&lastUpdate=${lastUpdate}`);
+            const checkData = await checkResponse.json();
             
-            // Erst nach erfolgreichem Update die Änderungslisten zurücksetzen
-            addedLines.clear();
-            deletedLines.clear();
-            modifiedLines.clear();
-            
-            console.log('Projekt erfolgreich gespeichert');
+            if (checkData.success) {
+                // Prüfen ob alle gespeicherten Linien in existingIds sind
+                const existingIds = new Set(checkData.updates.existingIds);
+                const allLinesSaved = linesToSave.every(item => 
+                    item.layer.lineId && existingIds.has(item.layer.lineId)
+                );
+                
+                if (allLinesSaved) {
+                    // Erst jetzt die Änderungslisten zurücksetzen
+                    deletedLines.clear();
+                    modifiedLines.clear();
+                    addedLines.clear();
+                    
+                    // Save Button ausblenden
+                    hasUnsavedChanges = false;
+                    document.getElementById('save').classList.add('hidden');
+                    
+                    // Zeitstempel aktualisieren
+                    lastUpdate = checkData.updates.serverTime;
+                    
+                    console.log('Projekt erfolgreich gespeichert');
+                }
+            }
         } else {
             console.error('Fehler beim Speichern:', data.error);
             showSaveButton();
@@ -519,14 +559,8 @@ function toggleMode() {
 // Funktion zum Anzeigen des Save-Buttons
 function showSaveButton() {
     const saveButton = document.getElementById('save');
-    const drawingControls = document.getElementById('drawing-controls');
-    
-    // Erst den Container sichtbar machen
-    drawingControls.classList.remove('hidden');
-    
-    // Dann den Save-Button anzeigen
     saveButton.classList.remove('hidden');
-    
+    saveButton.classList.add('show');
     hasUnsavedChanges = true;
 }
 
@@ -651,8 +685,8 @@ async function checkForUpdates() {
                 }
             });
             
-            // Zeitstempel aktualisieren
-            lastUpdate = data.updates.timestamp;
+            // Server-Zeitstempel übernehmen
+            lastUpdate = data.updates.serverTime;
         }
     } catch (error) {
         console.error('Fehler beim Prüfen auf Updates:', error);

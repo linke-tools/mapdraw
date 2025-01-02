@@ -143,7 +143,8 @@ function loadProject($db, $projectId) {
             'zoom' => intval($project['zoom']),
             'drawings' => $drawings,
             'sessionId' => $sessionId,
-            'activeUsers' => $activeUsers
+            'activeUsers' => $activeUsers,
+            'serverTime' => time()
         ]);
     } catch (PDOException $e) {
         echo json_encode([
@@ -231,11 +232,18 @@ function updateActiveUsers($db, $projectId, $sessionId) {
 
 // Neue Funktion für Updates
 function checkUpdates($db, $projectId, $lastUpdate) {
-    // Neue Zeichnungen seit dem letzten Update abrufen
+    // Aktuelle Serverzeit holen
+    $currentTime = time();
+    
+    // 50 Sekunden vom letzten Update abziehen für den Zeitpuffer
+    $bufferTime = $lastUpdate - 50;
+    
+    // Neue Zeichnungen seit dem gepufferten Zeitstempel abrufen
     $stmt = $db->prepare('SELECT * FROM drawings 
                          WHERE project_id = ? 
-                         AND created_at > FROM_UNIXTIME(?)');
-    $stmt->execute([$projectId, $lastUpdate]);
+                         AND created_at > FROM_UNIXTIME(?)
+                         AND created_at <= NOW()');  // Sicherstellung dass wir keine zukünftigen Einträge bekommen
+    $stmt->execute([$projectId, $bufferTime]);
     $newDrawings = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
     // Alle aktuell existierenden Linien-IDs abrufen
@@ -246,7 +254,7 @@ function checkUpdates($db, $projectId, $lastUpdate) {
     return [
         'new' => $newDrawings,
         'existingIds' => $existingIds,
-        'timestamp' => time()
+        'serverTime' => $currentTime
     ];
 }
 ?> 

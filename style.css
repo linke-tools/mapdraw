@@ -201,7 +201,8 @@ button {
     display: none !important;
 }
 
-#drawing-controls #save {
+#save {
+    display: none;  /* Initial versteckt */
     background-color: #4CAF50;
     color: white;
     border: none;
@@ -210,25 +211,19 @@ button {
     cursor: pointer;
     position: relative;
     z-index: 1002;
-    display: inline-block;
 }
 
-#drawing-controls #save.hidden {
-    display: none !important;
-}
-
-#drawing-controls #save:hover {
+#save:hover {
     background-color: #45a049;
+}
+
+/* Nur diese eine Regel für das Anzeigen */
+#save.show {
+    display: inline-block !important;
 }
 
 #drawing-controls button {
     flex-shrink: 0;
-}
-
-#drawing-controls:not(.hidden) #save:not(.hidden) {
-    display: inline-block !important;
-    visibility: visible !important;
-    opacity: 1 !important;
 }
 
 #eraser.active {
