@@ -14,6 +14,7 @@ let sessionId = null;
 let addedLines = new Set();
 let deletedLines = new Set();
 let modifiedLines = new Set();
+let permanentlyDeletedLines = new Set(); // Neue Set für dauerhaft gelöschte Linien
 
 // Neue Variable für den Zeitstempel des letzten Updates
 let lastUpdate = Math.floor(Date.now() / 1000); // Initialer Wert ist aktuelle Zeit
@@ -166,13 +167,19 @@ function setupEventListeners() {
     document.getElementById('eraser').addEventListener('click', () => {
         isEraser = !isEraser; // Toggle Radierer
         const eraserBtn = document.getElementById('eraser');
+        const colorPicker = document.getElementById('color-picker');
+        
         if (isEraser) {
             eraserBtn.classList.add('active');
             // Cursor ändern um zu zeigen dass der Radierer aktiv ist
             document.getElementById('map').style.cursor = 'crosshair';
+            // Farbpicker ausblenden
+            colorPicker.style.display = 'none';
         } else {
             eraserBtn.classList.remove('active');
             document.getElementById('map').style.cursor = '';
+            // Farbpicker wieder anzeigen
+            colorPicker.style.display = 'inline-block';
         }
     });
     
@@ -195,43 +202,54 @@ function setupEventListeners() {
     const modeToggleBtn = document.getElementById('mode-toggle');
     modeToggleBtn.addEventListener('click', toggleMode);
 
-    // Klick-Handler für das Löschen von Linien anpassen
+    // Neue Funktion zum Löschen einer Linie
+    function deleteLine(layer) {
+        // Wenn die Linie eine ID hat (also bereits gespeichert wurde)
+        if (layer.lineId) {
+            deletedLines.add(layer.lineId); // ID zur Löschung vormerken
+            permanentlyDeletedLines.add(layer.lineId);
+        } else {
+            // Wenn die Linie noch nicht gespeichert wurde
+            addedLines.delete(layer);
+        }
+        
+        // Linie von der Karte entfernen
+        drawingLayer.removeLayer(layer);
+        
+        // Save-Button anzeigen
+        showSaveButton();
+    }
+
+    // Im Event-Handler für den Radierer die Distanzberechnung anpassen:
     map.on('click', function(e) {
         if (!isDrawMode || !isEraser) return;
         
-        const clickPoint = e.containerPoint; // Klickposition in Pixeln
-        const linesToRemove = [];
-        
-        drawingLayer.eachLayer(function(layer) {
+        let lineFound = false;
+        drawingLayer.eachLayer(layer => {
             if (layer instanceof L.Polyline) {
                 const points = layer.getLatLngs();
                 
-                // Prüfe jeden Liniensegment
+                // Prüfe jeden Punkt der Linie
                 for (let i = 0; i < points.length - 1; i++) {
-                    const start = map.latLngToContainerPoint(points[i]);
-                    const end = map.latLngToContainerPoint(points[i + 1]);
+                    const point1 = map.latLngToContainerPoint(points[i]);
+                    const point2 = map.latLngToContainerPoint(points[i + 1]);
+                    const clickPoint = map.latLngToContainerPoint(e.latlng);
                     
-                    // Berechne die Distanz in Pixeln
-                    const distance = distanceToSegment(clickPoint, start, end);
+                    // Berechne die Distanz zum Liniensegment in Pixeln
+                    const distance = L.LineUtil.pointToSegmentDistance(clickPoint, point1, point2);
                     
-                    // Wenn die Distanz kleiner als 10 Pixel ist
-                    if (distance < 10) {
-                        linesToRemove.push(layer);
-                        if (layer.lineId) {
-                            deletedLines.add(layer.lineId); // Gelöschte Linie markieren
-                        }
+                    if (distance < 10) { // 10 Pixel Toleranz
+                        deleteLine(layer);
+                        lineFound = true;
                         break;
                     }
                 }
             }
         });
-
-        // Gefundene Linien aus der Karte entfernen
-        if (linesToRemove.length > 0) {
-            linesToRemove.forEach(line => {
-                drawingLayer.removeLayer(line);
-            });
-            showSaveButton();
+        
+        if (lineFound) {
+            e.originalEvent.preventDefault();
+            e.originalEvent.stopPropagation();
         }
     });
 
@@ -475,25 +493,39 @@ async function saveChanges() {
         const center = map.getCenter();
         const zoom = map.getZoom();
         
-        // Kopie der zu speichernden Linien erstellen
-        const linesToSave = Array.from(addedLines).map(layer => ({
-            layer: layer,
-            data: {
-                path: layer.getLatLngs(),
-                color: layer.options.color
-            }
-        }));
+        // Nur Linien speichern, die noch nicht gelöscht wurden
+        const linesToSave = Array.from(addedLines)
+            .filter(layer => {
+                // Nicht speichern wenn die Linie als Layer in deletedLines ist
+                return !Array.from(deletedLines).some(item => 
+                    // Vergleiche Layer-Objekte oder IDs
+                    item === layer || (layer.lineId && item === layer.lineId)
+                );
+            })
+            .map(layer => ({
+                layer: layer,
+                data: {
+                    path: layer.getLatLngs(),
+                    color: layer.options.color
+                }
+            }));
+
+        // Nur IDs von existierenden (bereits gespeicherten) Linien zum Löschen senden
+        const linesToDelete = Array.from(deletedLines)
+            .filter(item => typeof item === 'number'); // Nur numerische IDs
 
         const changes = {
             added: linesToSave.map(item => item.data),
-            deleted: Array.from(deletedLines),
+            deleted: linesToDelete,
             modified: Array.from(modifiedLines)
         };
 
         console.log('Sending changes:', {
             added: changes.added.length,
             deleted: changes.deleted.length,
-            modified: changes.modified.length
+            modified: changes.modified.length,
+            deletedLines: Array.from(deletedLines), // Debug
+            addedLines: Array.from(addedLines) // Debug
         });
 
         const response = await fetch('api.php', {
@@ -519,12 +551,17 @@ async function saveChanges() {
                     const newLine = data.newLines[index];
                     if (newLine) {
                         item.layer.lineId = newLine.id;
-                        addedLines.delete(item.layer); // Sofort aus addedLines entfernen
+                        addedLines.delete(item.layer);
                     }
                 });
             }
             
-            // Andere Änderungslisten zurücksetzen
+            // Alle gelöschten Linien in permanentlyDeletedLines übernehmen
+            deletedLines.forEach(id => {
+                permanentlyDeletedLines.add(id);
+            });
+            
+            // Änderungslisten zurücksetzen
             deletedLines.clear();
             modifiedLines.clear();
             
@@ -536,11 +573,7 @@ async function saveChanges() {
             // Zeitstempel aktualisieren
             lastUpdate = data.serverTime;
             
-            console.log('Projekt erfolgreich gespeichert, verbleibende Änderungen:', {
-                added: addedLines.size,
-                deleted: deletedLines.size,
-                modified: modifiedLines.size
-            });
+            console.log('Projekt erfolgreich gespeichert');
         } else {
             console.error('Fehler beim Speichern:', data.error);
             showSaveButton();
@@ -753,8 +786,9 @@ async function checkForUpdates() {
             // Neue Zeichnungen hinzufügen
             if (data.updates && data.updates.new) {
                 data.updates.new.forEach(drawing => {
-                    // Nicht hinzufügen wenn die Linie in deletedLines ist
+                    // Nicht hinzufügen wenn die Linie in deletedLines oder permanentlyDeletedLines ist
                     if (!Array.from(deletedLines).includes(drawing.id) && 
+                        !permanentlyDeletedLines.has(drawing.id) &&
                         !Array.from(addedLines).some(line => line.lineId === drawing.id)) {
                         const path = JSON.parse(drawing.path);
                         const line = L.polyline(path, {
