@@ -1,7 +1,7 @@
 let map;
 let drawingLayer;
 let isDrawing = false;
-let currentColor = '#ff0000';
+let currentColor = getCookieColor() || generateRandomColor();
 let isEraser = false;
 let currentPath = [];
 let projectId = null;
@@ -17,6 +17,51 @@ let modifiedLines = new Set();
 
 // Neue Variable für den Zeitstempel des letzten Updates
 let lastUpdate = 0; // Wird mit Server-Zeit initialisiert
+
+// Cookie-Funktionen
+function setCookieColor(color) {
+    // Cookie für 1 Jahr setzen
+    const expires = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toUTCString();
+    document.cookie = `userColor=${color};path=/;expires=${expires}`;
+}
+
+function getCookieColor() {
+    const cookies = document.cookie.split(';');
+    for (let cookie of cookies) {
+        const [name, value] = cookie.trim().split('=');
+        if (name === 'userColor') {
+            return value;
+        }
+    }
+    return null;
+}
+
+function generateRandomColor() {
+    // Helle, gut sichtbare Farben generieren
+    const hue = Math.floor(Math.random() * 360); // 0-360
+    const saturation = 70 + Math.floor(Math.random() * 30); // 70-100%
+    const lightness = 35 + Math.floor(Math.random() * 15); // 35-50%
+    
+    // Konvertiere HSL zu HEX
+    const color = `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+    const tempElement = document.createElement('div');
+    tempElement.style.color = color;
+    document.body.appendChild(tempElement);
+    const rgbColor = window.getComputedStyle(tempElement).color;
+    document.body.removeChild(tempElement);
+    
+    // RGB zu HEX konvertieren
+    const rgbValues = rgbColor.match(/\d+/g);
+    const hexColor = '#' + rgbValues.map(x => {
+        const hex = parseInt(x).toString(16);
+        return hex.length === 1 ? '0' + hex : hex;
+    }).join('');
+    
+    // Cookie setzen
+    setCookieColor(hexColor);
+    
+    return hexColor;
+}
 
 // Initialisierung
 document.addEventListener('DOMContentLoaded', () => {
@@ -114,6 +159,8 @@ function setupEventListeners() {
     document.getElementById('color-picker').addEventListener('change', (e) => {
         currentColor = e.target.value;
         isEraser = false;
+        // Neue Farbe im Cookie speichern
+        setCookieColor(currentColor);
     });
     
     document.getElementById('eraser').addEventListener('click', () => {
@@ -399,6 +446,9 @@ async function loadProject() {
 
         // Server-Zeitstempel übernehmen
         lastUpdate = data.serverTime;
+
+        // Color-Picker auf die aktuelle Farbe setzen
+        document.getElementById('color-picker').value = currentColor;
     } catch (error) {
         showError('Fehler beim Laden des Projekts');
         setTimeout(() => {
