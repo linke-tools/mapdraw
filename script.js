@@ -388,13 +388,15 @@ async function loadProject() {
             setTimeout(() => {
                 // Map-Events für Position und Zoom
                 map.on('moveend', function() {
-                    if (projectId && hasUncommittedChanges()) {
+                    if (projectId) {
+                        // Save-Button bei jeder manuellen Änderung anzeigen
                         showSaveButton();
                     }
                 });
 
                 map.on('zoomend', function() {
-                    if (projectId && hasUncommittedChanges()) {
+                    if (projectId) {
+                        // Save-Button bei jeder manuellen Änderung anzeigen
                         showSaveButton();
                     }
                 });
@@ -607,17 +609,16 @@ function hasUncommittedChanges() {
 
 // Funktion zum Anzeigen des Save-Buttons
 function showSaveButton() {
-    if (hasUncommittedChanges()) {
-        const saveButton = document.getElementById('save');
-        saveButton.classList.remove('hidden');
-        saveButton.classList.add('show');
-        hasUnsavedChanges = true;
-        console.log('Save button shown, changes:', {
-            added: addedLines.size,
-            deleted: deletedLines.size,
-            modified: modifiedLines.size
-        });
-    }
+    const saveButton = document.getElementById('save');
+    saveButton.classList.remove('hidden');
+    saveButton.classList.add('show');
+    hasUnsavedChanges = true;
+    console.log('Save button shown, changes:', {
+        added: addedLines.size,
+        deleted: deletedLines.size,
+        modified: modifiedLines.size,
+        mapMoved: true
+    });
 }
 
 function hideSaveButton() {
