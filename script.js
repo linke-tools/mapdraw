@@ -16,7 +16,7 @@ let deletedLines = new Set();
 let modifiedLines = new Set();
 
 // Neue Variable für den Zeitstempel des letzten Updates
-let lastUpdate = 0; // Wird mit Server-Zeit initialisiert
+let lastUpdate = Math.floor(Date.now() / 1000); // Initialer Wert ist aktuelle Zeit
 
 // Cookie-Funktionen
 function setCookieColor(color) {
@@ -386,14 +386,15 @@ async function loadProject() {
             
             // Nach kurzer Verzögerung Map-Events wieder aktivieren
             setTimeout(() => {
+                // Map-Events für Position und Zoom
                 map.on('moveend', function() {
-                    if (projectId) {
+                    if (projectId && hasUncommittedChanges()) {
                         showSaveButton();
                     }
                 });
 
                 map.on('zoomend', function() {
-                    if (projectId) {
+                    if (projectId && hasUncommittedChanges()) {
                         showSaveButton();
                     }
                 });
@@ -445,7 +446,10 @@ async function loadProject() {
         setInterval(checkForUpdates, 2000); // Alle 2 Sekunden
 
         // Server-Zeitstempel übernehmen
-        lastUpdate = data.serverTime;
+        if (data.serverTime) {
+            lastUpdate = data.serverTime;
+            console.log('Initial server time:', lastUpdate);
+        }
 
         // Color-Picker auf die aktuelle Farbe setzen
         document.getElementById('color-picker').value = currentColor;
@@ -501,44 +505,34 @@ async function saveChanges() {
 
         const data = await response.json();
         if (data.success) {
-            // Neue IDs den Linien zuweisen
+            // Neue IDs den Linien zuweisen und aus addedLines entfernen
             if (data.newLines) {
                 linesToSave.forEach((item, index) => {
                     const newLine = data.newLines[index];
                     if (newLine) {
-                        // ID der existierenden Linie aktualisieren
                         item.layer.lineId = newLine.id;
+                        addedLines.delete(item.layer); // Sofort aus addedLines entfernen
                     }
                 });
             }
             
-            // Warten auf das nächste Update bevor wir die Linien aus addedLines entfernen
-            const checkResponse = await fetch(`api.php?action=check_updates&project=${projectId}&lastUpdate=${lastUpdate}`);
-            const checkData = await checkResponse.json();
+            // Andere Änderungslisten zurücksetzen
+            deletedLines.clear();
+            modifiedLines.clear();
             
-            if (checkData.success) {
-                // Prüfen ob alle gespeicherten Linien in existingIds sind
-                const existingIds = new Set(checkData.updates.existingIds);
-                const allLinesSaved = linesToSave.every(item => 
-                    item.layer.lineId && existingIds.has(item.layer.lineId)
-                );
-                
-                if (allLinesSaved) {
-                    // Erst jetzt die Änderungslisten zurücksetzen
-                    deletedLines.clear();
-                    modifiedLines.clear();
-                    addedLines.clear();
-                    
-                    // Save Button ausblenden
-                    hasUnsavedChanges = false;
-                    document.getElementById('save').classList.add('hidden');
-                    
-                    // Zeitstempel aktualisieren
-                    lastUpdate = checkData.updates.serverTime;
-                    
-                    console.log('Projekt erfolgreich gespeichert');
-                }
+            // Save Button ausblenden wenn keine Änderungen mehr vorhanden
+            if (!hasUncommittedChanges()) {
+                hideSaveButton();
             }
+            
+            // Zeitstempel aktualisieren
+            lastUpdate = data.serverTime;
+            
+            console.log('Projekt erfolgreich gespeichert, verbleibende Änderungen:', {
+                added: addedLines.size,
+                deleted: deletedLines.size,
+                modified: modifiedLines.size
+            });
         } else {
             console.error('Fehler beim Speichern:', data.error);
             showSaveButton();
@@ -606,12 +600,32 @@ function toggleMode() {
     }
 }
 
+// Neue Funktion um zu prüfen ob es ungespeicherte Änderungen gibt
+function hasUncommittedChanges() {
+    return addedLines.size > 0 || deletedLines.size > 0 || modifiedLines.size > 0;
+}
+
 // Funktion zum Anzeigen des Save-Buttons
 function showSaveButton() {
+    if (hasUncommittedChanges()) {
+        const saveButton = document.getElementById('save');
+        saveButton.classList.remove('hidden');
+        saveButton.classList.add('show');
+        hasUnsavedChanges = true;
+        console.log('Save button shown, changes:', {
+            added: addedLines.size,
+            deleted: deletedLines.size,
+            modified: modifiedLines.size
+        });
+    }
+}
+
+function hideSaveButton() {
     const saveButton = document.getElementById('save');
-    saveButton.classList.remove('hidden');
-    saveButton.classList.add('show');
-    hasUnsavedChanges = true;
+    saveButton.classList.remove('show');
+    saveButton.classList.add('hidden');
+    hasUnsavedChanges = false;
+    console.log('Save button hidden, hasUnsavedChanges:', hasUnsavedChanges);
 }
 
 // Debug-Funktion
@@ -705,40 +719,71 @@ function showError(message) {
 async function checkForUpdates() {
     if (!projectId) return;
     
+    const timestamp = lastUpdate || Math.floor(Date.now() / 1000);
+    
     try {
-        const response = await fetch(`api.php?action=check_updates&project=${projectId}&lastUpdate=${lastUpdate}`);
-        const data = await response.json();
+        const response = await fetch(`api.php?action=check_updates&project=${projectId}&lastUpdate=${timestamp}`);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const text = await response.text();
+        if (!text) {
+            console.log('Leere Antwort vom Server');
+            return;
+        }
+        
+        let data;
+        try {
+            data = JSON.parse(text);
+        } catch (e) {
+            console.error('Fehler beim Parsen der Server-Antwort:', text);
+            throw e;
+        }
         
         if (data.success) {
             // Neue Zeichnungen hinzufügen
-            data.updates.new.forEach(drawing => {
-                // Prüfen ob die Zeichnung nicht von uns selbst kommt
-                if (!Array.from(addedLines).some(line => line.lineId === drawing.id)) {
-                    const path = JSON.parse(drawing.path);
-                    const line = L.polyline(path, {
-                        color: drawing.color,
-                        weight: 3
-                    });
-                    line.lineId = drawing.id;
-                    drawingLayer.addLayer(line);
-                }
-            });
+            if (data.updates && data.updates.new) {
+                data.updates.new.forEach(drawing => {
+                    // Nicht hinzufügen wenn die Linie in deletedLines ist
+                    if (!Array.from(deletedLines).includes(drawing.id) && 
+                        !Array.from(addedLines).some(line => line.lineId === drawing.id)) {
+                        const path = JSON.parse(drawing.path);
+                        const line = L.polyline(path, {
+                            color: drawing.color,
+                            weight: 3
+                        });
+                        line.lineId = drawing.id;
+                        drawingLayer.addLayer(line);
+                    }
+                });
+            }
             
             // Prüfen welche lokalen Linien nicht mehr existieren
-            const existingIds = new Set(data.updates.existingIds);
-            drawingLayer.eachLayer(layer => {
-                if (layer instanceof L.Polyline && layer.lineId) {
-                    // Nur Linien mit ID prüfen und keine neu hinzugefügten Linien
-                    if (!existingIds.has(layer.lineId) && !addedLines.has(layer)) {
-                        drawingLayer.removeLayer(layer);
+            if (data.updates && data.updates.existingIds) {
+                const existingIds = new Set(data.updates.existingIds);
+                drawingLayer.eachLayer(layer => {
+                    if (layer instanceof L.Polyline && layer.lineId) {
+                        // Nicht entfernen wenn die Linie gerade erst gelöscht wurde
+                        if (!existingIds.has(layer.lineId) && 
+                            !addedLines.has(layer) && 
+                            !deletedLines.has(layer.lineId)) {
+                            drawingLayer.removeLayer(layer);
+                        }
                     }
-                }
-            });
+                });
+            }
             
-            // Server-Zeitstempel übernehmen
-            lastUpdate = data.updates.serverTime;
+            if (data.updates && data.updates.serverTime) {
+                lastUpdate = data.updates.serverTime;
+                console.log('Updated server time:', lastUpdate);
+            }
+        } else if (data.error) {
+            console.error('Server meldet Fehler:', data.error);
         }
     } catch (error) {
         console.error('Fehler beim Prüfen auf Updates:', error);
+        await new Promise(resolve => setTimeout(resolve, 5000));
     }
 } 

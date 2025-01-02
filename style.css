@@ -44,6 +44,9 @@ html, body {
     padding: 10px;
     border-radius: 5px;
     box-shadow: 0 0 10px rgba(0,0,0,0.2);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
 }
 
 #project-name {
@@ -193,8 +196,7 @@ button {
     display: flex;
     gap: 10px;
     align-items: center;
-    position: relative;
-    z-index: 1001;
+    flex-wrap: nowrap;
 }
 
 #drawing-controls.hidden {
@@ -202,22 +204,20 @@ button {
 }
 
 #save {
-    display: none;  /* Initial versteckt */
+    display: none !important;
     background-color: #4CAF50;
     color: white;
     border: none;
     border-radius: 3px;
     padding: 5px 15px;
     cursor: pointer;
-    position: relative;
-    z-index: 1002;
+    margin-left: auto;
 }
 
 #save:hover {
     background-color: #45a049;
 }
 
-/* Nur diese eine Regel für das Anzeigen */
 #save.show {
     display: inline-block !important;
 }
