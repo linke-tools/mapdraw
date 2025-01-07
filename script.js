@@ -622,9 +622,9 @@ function toggleMode() {
         mapElement.classList.add('draw-mode');
         mapElement.classList.remove('nav-mode');
         
-        // Zeige Zeichenwerkzeuge
-        colorPicker.style.display = 'inline-block';
+        // Zeige Zeichenwerkzeuge, aber prüfe Eraser-Status
         eraserBtn.style.display = 'inline-block';
+        colorPicker.style.display = isEraser ? 'none' : 'inline-block';
         
         // Nur Drag deaktivieren, andere Touch-Interaktionen beibehalten
         map.dragging.disable();
