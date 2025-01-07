@@ -19,20 +19,22 @@ html, body {
     width: 100%;
     height: 100%;
     z-index: 1;
-    touch-action: none;
+    touch-action: manipulation;
 }
 
 #map.draw-mode {
-    touch-action: none;
+    touch-action: none !important;
 }
 
 #map.nav-mode {
-    touch-action: manipulation;
+    touch-action: manipulation !important;
 }
 
 /* Für die Controls touch-action wieder erlauben */
 #controls {
     touch-action: auto;
+    pointer-events: auto;
+    z-index: 1000;
 }
 
 #controls {

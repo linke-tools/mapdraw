@@ -83,13 +83,30 @@ document.addEventListener('DOMContentLoaded', () => {
     // Map initialisieren
     map = L.map('map', {
         zoomControl: true,
-        tap: true,
+        tap: false,
         touchZoom: true,
-        bounceAtZoomLimits: true,
-        maxBoundsViscosity: 0.8
+        bounceAtZoomLimits: false,
+        maxBoundsViscosity: 0.8,
+        renderer: L.canvas(),
+        wheelPxPerZoomLevel: 100,
+        dragging: true,
+        // Vereinfachte Touch-Optionen
+        worldCopyJump: true,
+        preferCanvas: true,
+        updateWhenIdle: false,
+        updateWhenZooming: true,
+        maxZoom: 19,
+        minZoom: 1
     }).setView([0, 0], 2);
+
+    // TileLayer-Optionen anpassen
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© OpenStreetMap contributors'
+        attribution: '© OpenStreetMap contributors',
+        keepBuffer: 4,
+        updateWhenIdle: false,
+        updateWhenZooming: true,
+        maxNativeZoom: 19,
+        maxZoom: 19
     }).addTo(map);
 
     drawingLayer = L.layerGroup().addTo(map);
@@ -594,50 +611,47 @@ function toggleMode() {
     const modeToggleBtn = document.getElementById('mode-toggle');
     const mapElement = document.getElementById('map');
     const drawingControls = document.getElementById('drawing-controls');
-    const controlElements = drawingControls.querySelectorAll('*:not(#mode-toggle)');
+    const colorPicker = document.getElementById('color-picker');
+    const eraserBtn = document.getElementById('eraser');
 
     if (isDrawMode) {
-        // Zeichenmodus aktivieren
+        // Zeichenmodus
         modeToggleBtn.textContent = 'Navigieren';
         modeToggleBtn.classList.remove('nav-mode');
         modeToggleBtn.classList.add('draw-mode');
         mapElement.classList.add('draw-mode');
         mapElement.classList.remove('nav-mode');
         
-        // Kontrollelemente anzeigen
-        controlElements.forEach(element => {
-            element.style.display = '';
-        });
+        // Zeige Zeichenwerkzeuge
+        colorPicker.style.display = 'inline-block';
+        eraserBtn.style.display = 'inline-block';
         
-        // Im Zeichenmodus nur bestimmte Interaktionen deaktivieren
+        // Nur Drag deaktivieren, andere Touch-Interaktionen beibehalten
         map.dragging.disable();
+        map.touchZoom.enable();
+        map.doubleClickZoom.disable();
+        map.scrollWheelZoom.enable();
         map.boxZoom.disable();
         map.keyboard.disable();
-        // Zoom-Funktionen aktiviert lassen
-        map.touchZoom.enable();
-        map.doubleClickZoom.enable();
-        map.scrollWheelZoom.enable();
     } else {
-        // Navigationsmodus aktivieren
+        // Navigationsmodus
         modeToggleBtn.textContent = 'Zeichnen';
         modeToggleBtn.classList.remove('draw-mode');
         modeToggleBtn.classList.add('nav-mode');
         mapElement.classList.remove('draw-mode');
         mapElement.classList.add('nav-mode');
         
-        // Kontrollelemente ausblenden außer mode-toggle
-        controlElements.forEach(element => {
-            element.style.display = 'none';
-        });
+        // Verstecke Zeichenwerkzeuge
+        colorPicker.style.display = 'none';
+        eraserBtn.style.display = 'none';
         
-        // Alle Interaktionen wieder aktivieren
+        // Alle Touch-Interaktionen aktivieren
         map.dragging.enable();
         map.touchZoom.enable();
         map.doubleClickZoom.enable();
         map.scrollWheelZoom.enable();
         map.boxZoom.enable();
         map.keyboard.enable();
-        if (map.tap) map.tap.enable();
     }
 }
 
