@@ -4,11 +4,7 @@ if (!defined('SECURE_ACCESS')) {
     die('Direkter Zugriff nicht erlaubt');
 }
 
-// Datenbank-Konfiguration
-$db_host = '127.0.0.1';
-$db_name = 'map_drawing_dev';
-$db_user = 'maps';
-$db_pass = 'thaeX7ooho';
+@require_once 'config.php';
 
 try {
     // PDO-Verbindung herstellen
