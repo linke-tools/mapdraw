@@ -6,10 +6,9 @@ A straightforward web application designed for collaboratively drawing lines on 
 
 
 ## Installation
-
-- Copy the `/src` directory to you PHP-enabled webspace.
+- Point your document root to  `/src` directory to your PHP-enabled webspace.
 - Use the `database.sql` file to create your database.
-- Rename `config.sample.php` to `config.php` and fill in your database credentials
+- Rename `config.example.json` to `config.json` in `/config` and fill in your database credentials
 
 ## Usage
 
