@@ -1,6 +1,3 @@
-CREATE DATABASE map_drawing_dev;
-USE map_drawing_dev;
-
 CREATE TABLE projects (
     id CHAR(36) PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
