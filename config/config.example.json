@@ -5,13 +5,5 @@
         "username": "your_username",
         "password": "your_password",
         "charset": "utf8mb4",
-        "options": {
-            "error_mode": "exception",
-            "default_fetch_mode": "assoc",
-            "emulate_prepares": false
-        }
-    },
-    "security": {
-        "secure_access": true
     }
 } 
